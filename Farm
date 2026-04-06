@@ -1,16 +1,44 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local char = player.Character or player.CharacterAdded:Wait()
 local hrp = char:WaitForChild("HumanoidRootPart")
 
 -- SETTINGS
-local selectedWeapon = "Melee" -- Melee / Sword / Fruit
-local running = true
+local running = false
+local Weapon = "Melee" -- Melee / Sword / Fruit
+local FlySpeed = 300
 
--- 📊 LEVEL PLAYER
-local function getPlayerLevel()
+-- 🖥️ UI
+local gui = Instance.new("ScreenGui", player.PlayerGui)
+gui.Name = "FarmUI"
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0,250,0,150)
+frame.Position = UDim2.new(0,20,0,100)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+
+local btn = Instance.new("TextButton", frame)
+btn.Size = UDim2.new(1,-20,0,50)
+btn.Position = UDim2.new(0,10,0,10)
+btn.Text = "Start Farm"
+btn.TextScaled = true
+btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+
+local weaponBox = Instance.new("TextBox", frame)
+weaponBox.Size = UDim2.new(1,-20,0,40)
+weaponBox.Position = UDim2.new(0,10,0,70)
+weaponBox.PlaceholderText = "Weapon: Melee/Sword/Fruit"
+weaponBox.Text = Weapon
+weaponBox.TextScaled = true
+
+-- 🎯 LEVEL
+local function getLevel()
 	local stats = player:FindFirstChild("leaderstats")
 	if stats and stats:FindFirstChild("Level") then
 		return stats.Level.Value
@@ -18,20 +46,18 @@ local function getPlayerLevel()
 	return 1
 end
 
--- 🎯 หา NPC เลเวลใกล้เคียง
+-- 🎯 TARGET
 local function getTarget()
 	local enemies = workspace:FindFirstChild("Enemies")
 	if not enemies then return nil end
 	
-	local myLevel = getPlayerLevel()
+	local myLevel = getLevel()
 	local best, diff = nil, math.huge
 	
 	for _, npc in pairs(enemies:GetChildren()) do
 		if npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
-			
-			local npcLevel = npc:FindFirstChild("Level") and npc.Level.Value or 1
-			local d = math.abs(myLevel - npcLevel)
-			
+			local lvl = npc:FindFirstChild("Level") and npc.Level.Value or 1
+			local d = math.abs(myLevel - lvl)
 			if d < diff then
 				diff = d
 				best = npc
@@ -42,50 +68,20 @@ local function getTarget()
 	return best
 end
 
--- 🕊️ บินเนียน
-local function tweenTo(pos)
-	local tween = TweenService:Create(
-		hrp,
-		TweenInfo.new(0.6, Enum.EasingStyle.Linear),
-		{CFrame = CFrame.new(pos)}
-	)
-	tween:Play()
-	tween.Completed:Wait()
-end
-
--- ⚔️ โหมดโจมตี
-local function attack(npc)
-	if not npc or not npc:FindFirstChild("Humanoid") then return end
-	
-	if selectedWeapon == "Melee" then
-		print("Punching", npc.Name)
-	elseif selectedWeapon == "Sword" then
-		print("Sword attack", npc.Name)
-	elseif selectedWeapon == "Fruit" then
-		print("Fruit skill", npc.Name)
-	end
-	
-	npc.Humanoid:TakeDamage(10)
-end
-
--- 📜 AUTO QUEST (Generic System)
-local currentQuest = nil
-
+-- 📜 QUEST (GENERIC)
 local function getQuest()
 	local quests = workspace:FindFirstChild("Quests")
 	if not quests then return nil end
 	
-	local myLevel = getPlayerLevel()
+	local myLevel = getLevel()
 	local best, diff = nil, math.huge
 	
-	for _, quest in pairs(quests:GetChildren()) do
-		if quest:FindFirstChild("RequiredLevel") then
-			local qLevel = quest.RequiredLevel.Value
-			local d = math.abs(myLevel - qLevel)
-			
+	for _, q in pairs(quests:GetChildren()) do
+		if q:FindFirstChild("RequiredLevel") then
+			local d = math.abs(myLevel - q.RequiredLevel.Value)
 			if d < diff then
 				diff = d
-				best = quest
+				best = q
 			end
 		end
 	end
@@ -93,46 +89,78 @@ local function getQuest()
 	return best
 end
 
-local function doQuest()
-	if currentQuest and currentQuest:FindFirstChild("NPC") then
-		
-		local npc = currentQuest.NPC
-		
-		if npc:FindFirstChild("HumanoidRootPart") then
-			-- 🕊️ บินไปหาเควส
-			tweenTo(npc.HumanoidRootPart.Position + Vector3.new(0,5,0))
-			
-			print("Doing Quest:", currentQuest.Name)
-			
-			-- (ในแมพจริง ตรงนี้คือ interact / accept quest)
+-- 🕊️ FLY (HEARTBEAT SPEED CONTROL)
+local function flyTo(targetPos)
+	local connection
+	connection = RunService.Heartbeat:Connect(function(deltaTime)
+		if not running then
+			connection:Disconnect()
+			return
 		end
-	end
+		
+		local direction = (targetPos - hrp.Position)
+		local distance = direction.Magnitude
+		
+		if distance < 3 then
+			connection:Disconnect()
+			return
+		end
+		
+		direction = direction.Unit
+		local move = direction * FlySpeed * deltaTime
+		hrp.CFrame = CFrame.new(hrp.Position + move, targetPos)
+	end)
+	
+	repeat task.wait() until not connection.Connected
 end
 
--- 🔁 LOOP หลัก
+-- ⚔️ ATTACK
+local function attack(npc)
+	if not npc or not npc:FindFirstChild("Humanoid") then return end
+	print("Attack:", npc.Name, "| Weapon:", Weapon)
+	npc.Humanoid:TakeDamage(10)
+end
+
+-- 🔁 MAIN LOOP
 task.spawn(function()
-	while running do
-		
-		-- 📜 เลือกเควส
-		currentQuest = getQuest()
-		if currentQuest then
-			doQuest()
+	while true do
+		if running then
+			-- QUEST
+			local q = getQuest()
+			if q and q:FindFirstChild("NPC") then
+				flyTo(q.NPC.HumanoidRootPart.Position + Vector3.new(0,5,0))
+				print("Doing Quest:", q.Name)
+			end
+			
+			-- FARM NPC
+			local target = getTarget()
+			if target and target:FindFirstChild("HumanoidRootPart") then
+				flyTo(target.HumanoidRootPart.Position + Vector3.new(0,5,0))
+				attack(target)
+			end
 		end
-		
-		-- 🎯 หา NPC ฟาร์ม
-		local target = getTarget()
-		
-		if target and target:FindFirstChild("HumanoidRootPart") then
-			
-			local pos = target.HumanoidRootPart.Position + Vector3.new(0,5,0)
-			
-			-- 🕊️ บินไป
-			tweenTo(pos)
-			
-			-- ⚔️ ตี
-			attack(target)
-		end
-		
-		task.wait(0.4)
+		task.wait(0.3)
 	end
 end)
+
+-- 🎮 BUTTON CONTROL
+btn.MouseButton1Click:Connect(function()
+	running = not running
+	if running then
+		btn.Text = "Stop Farm"
+	else
+		btn.Text = "Start Farm"
+	end
+end)
+
+-- 🎮 WEAPON CONTROL
+weaponBox.FocusLost:Connect(function()
+	local txt = weaponBox.Text
+	if txt == "Melee" or txt == "Sword" or txt == "Fruit" then
+		Weapon = txt
+	else
+		weaponBox.Text = Weapon
+	end
+end)
+
+print("✅ Farm UI Loaded - Click Start to Begin Farming")
