@@ -1,0 +1,138 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+
+-- SETTINGS
+local selectedWeapon = "Melee" -- Melee / Sword / Fruit
+local running = true
+
+-- 📊 LEVEL PLAYER
+local function getPlayerLevel()
+	local stats = player:FindFirstChild("leaderstats")
+	if stats and stats:FindFirstChild("Level") then
+		return stats.Level.Value
+	end
+	return 1
+end
+
+-- 🎯 หา NPC เลเวลใกล้เคียง
+local function getTarget()
+	local enemies = workspace:FindFirstChild("Enemies")
+	if not enemies then return nil end
+	
+	local myLevel = getPlayerLevel()
+	local best, diff = nil, math.huge
+	
+	for _, npc in pairs(enemies:GetChildren()) do
+		if npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
+			
+			local npcLevel = npc:FindFirstChild("Level") and npc.Level.Value or 1
+			local d = math.abs(myLevel - npcLevel)
+			
+			if d < diff then
+				diff = d
+				best = npc
+			end
+		end
+	end
+	
+	return best
+end
+
+-- 🕊️ บินเนียน
+local function tweenTo(pos)
+	local tween = TweenService:Create(
+		hrp,
+		TweenInfo.new(0.6, Enum.EasingStyle.Linear),
+		{CFrame = CFrame.new(pos)}
+	)
+	tween:Play()
+	tween.Completed:Wait()
+end
+
+-- ⚔️ โหมดโจมตี
+local function attack(npc)
+	if not npc or not npc:FindFirstChild("Humanoid") then return end
+	
+	if selectedWeapon == "Melee" then
+		print("Punching", npc.Name)
+	elseif selectedWeapon == "Sword" then
+		print("Sword attack", npc.Name)
+	elseif selectedWeapon == "Fruit" then
+		print("Fruit skill", npc.Name)
+	end
+	
+	npc.Humanoid:TakeDamage(10)
+end
+
+-- 📜 AUTO QUEST (Generic System)
+local currentQuest = nil
+
+local function getQuest()
+	local quests = workspace:FindFirstChild("Quests")
+	if not quests then return nil end
+	
+	local myLevel = getPlayerLevel()
+	local best, diff = nil, math.huge
+	
+	for _, quest in pairs(quests:GetChildren()) do
+		if quest:FindFirstChild("RequiredLevel") then
+			local qLevel = quest.RequiredLevel.Value
+			local d = math.abs(myLevel - qLevel)
+			
+			if d < diff then
+				diff = d
+				best = quest
+			end
+		end
+	end
+	
+	return best
+end
+
+local function doQuest()
+	if currentQuest and currentQuest:FindFirstChild("NPC") then
+		
+		local npc = currentQuest.NPC
+		
+		if npc:FindFirstChild("HumanoidRootPart") then
+			-- 🕊️ บินไปหาเควส
+			tweenTo(npc.HumanoidRootPart.Position + Vector3.new(0,5,0))
+			
+			print("Doing Quest:", currentQuest.Name)
+			
+			-- (ในแมพจริง ตรงนี้คือ interact / accept quest)
+		end
+	end
+end
+
+-- 🔁 LOOP หลัก
+task.spawn(function()
+	while running do
+		
+		-- 📜 เลือกเควส
+		currentQuest = getQuest()
+		if currentQuest then
+			doQuest()
+		end
+		
+		-- 🎯 หา NPC ฟาร์ม
+		local target = getTarget()
+		
+		if target and target:FindFirstChild("HumanoidRootPart") then
+			
+			local pos = target.HumanoidRootPart.Position + Vector3.new(0,5,0)
+			
+			-- 🕊️ บินไป
+			tweenTo(pos)
+			
+			-- ⚔️ ตี
+			attack(target)
+		end
+		
+		task.wait(0.4)
+	end
+end)
