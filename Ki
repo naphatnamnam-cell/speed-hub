@@ -1,0 +1,525 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+local camera = Workspace.CurrentCamera
+
+-- ═══════════════════════════════════════
+-- CONFIG (ปรับได้)
+-- ═══════════════════════════════════════
+local CONFIG = {
+    TOGGLE_KEY = Enum.KeyCode.BackQuote, -- ปุ่ม ~ หรือ `
+    ADMIN_NAME = player.Name,            -- ใส่ชื่อ admin ที่นี่ หรือใช้ชื่อตัวเอง
+    MONEY_NAMES = {"Money","Cash","Coins","Gold","Gems","Credits","Points"}, -- ชื่อ stat เงิน
+    WEAPON_NAME = "AdminSword",          -- ชื่อ Tool ใน ServerStorage/ReplicatedStorage
+    DAMAGE_AMOUNT = 100,                 -- ดาเมจเริ่มต้น
+}
+
+-- ═══════════════════════════════════════
+-- STATE
+-- ═══════════════════════════════════════
+local State = {
+    menuOpen = false,
+    flyEnabled = false,
+    godEnabled = false,
+    flySpeed = 75,
+    walkSpeed = 16,
+    moneyAmount = 1000000,
+    moneyStep = 100000,
+}
+
+-- ═══════════════════════════════════════
+-- CHARACTER UPDATE ON RESPAWN
+-- ═══════════════════════════════════════
+player.CharacterAdded:Connect(function(char)
+    character = char
+    humanoid = char:WaitForChild("Humanoid")
+    rootPart = char:WaitForChild("HumanoidRootPart")
+    -- re-apply god mode if active
+    if State.godEnabled then
+        humanoid.MaxHealth = math.huge
+        humanoid.Health = math.huge
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- GUI BUILDER
+-- ═══════════════════════════════════════
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AdminPanel"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player.PlayerGui
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 380, 0, 480)
+mainFrame.Position = UDim2.new(0.5, -190, 0.5, -240)
+mainFrame.BackgroundColor3 = Color3.fromRGB(8, 18, 8)
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+mainFrame.Parent = screenGui
+
+-- Corner
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Border glow stroke
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(0, 204, 51)
+stroke.Thickness = 1.5
+stroke.Parent = mainFrame
+
+-- ─── Header ───
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 46)
+header.BackgroundColor3 = Color3.fromRGB(12, 35, 12)
+header.BorderSizePixel = 0
+header.Parent = mainFrame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 10)
+headerCorner.Parent = header
+
+-- fix bottom corners of header
+local headerFix = Instance.new("Frame")
+headerFix.Size = UDim2.new(1, 0, 0.5, 0)
+headerFix.Position = UDim2.new(0, 0, 0.5, 0)
+headerFix.BackgroundColor3 = Color3.fromRGB(12, 35, 12)
+headerFix.BorderSizePixel = 0
+headerFix.Parent = header
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -100, 1, 0)
+titleLabel.Position = UDim2.new(0, 14, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "เมนูคำสั่งเพิ่มเติม"
+titleLabel.TextColor3 = Color3.fromRGB(0, 255, 68)
+titleLabel.TextSize = 17
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = header
+
+-- Header stroke bottom line
+local headerLine = Instance.new("Frame")
+headerLine.Size = UDim2.new(1, 0, 0, 1.5)
+headerLine.Position = UDim2.new(0, 0, 1, -1)
+headerLine.BackgroundColor3 = Color3.fromRGB(0, 204, 51)
+headerLine.BorderSizePixel = 0
+headerLine.Parent = header
+
+-- Close button
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -40, 0.5, -15)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.TextSize = 14
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = header
+local closeBtnCorner = Instance.new("UICorner")
+closeBtnCorner.CornerRadius = UDim.new(0,6)
+closeBtnCorner.Parent = closeBtn
+
+-- ─── Scroll Content ───
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -16, 1, -56)
+scrollFrame.Position = UDim2.new(0, 8, 0, 52)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 3
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 204, 51)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.Parent = mainFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 6)
+listLayout.Parent = scrollFrame
+
+local listPad = Instance.new("UIPadding")
+listPad.PaddingBottom = UDim.new(0, 6)
+listPad.Parent = scrollFrame
+
+-- ═══════════════════════════════════════
+-- UI HELPER FUNCTIONS
+-- ═══════════════════════════════════════
+
+local function makeRow(iconText)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 68)
+    row.BackgroundColor3 = Color3.fromRGB(10, 22, 10)
+    row.BorderSizePixel = 0
+    row.Parent = scrollFrame
+    local rc = Instance.new("UICorner"); rc.CornerRadius = UDim.new(0,8); rc.Parent = row
+    local rs = Instance.new("UIStroke"); rs.Color = Color3.fromRGB(30, 90, 30); rs.Thickness = 1; rs.Parent = row
+
+    local icon = Instance.new("TextLabel")
+    icon.Size = UDim2.new(0, 44, 0, 44)
+    icon.Position = UDim2.new(0, 10, 0.5, -22)
+    icon.BackgroundColor3 = Color3.fromRGB(12, 30, 12)
+    icon.Text = iconText
+    icon.TextSize = 22
+    icon.Font = Enum.Font.GothamBold
+    icon.TextColor3 = Color3.fromRGB(0,255,68)
+    icon.BorderSizePixel = 0
+    icon.Parent = row
+    local ic = Instance.new("UICorner"); ic.CornerRadius = UDim.new(0,8); ic.Parent = icon
+    local is = Instance.new("UIStroke"); is.Color = Color3.fromRGB(0,204,51); is.Thickness = 1.5; is.Parent = icon
+
+    local content = Instance.new("Frame")
+    content.Size = UDim2.new(1, -66, 1, 0)
+    content.Position = UDim2.new(0, 60, 0, 0)
+    content.BackgroundTransparency = 1
+    content.Parent = row
+
+    return row, content, rs
+end
+
+local function makeLabel(parent, text, y, size)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 20)
+    lbl.Position = UDim2.new(0, 0, 0, y or 6)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(0, 255, 68)
+    lbl.TextSize = size or 14
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = parent
+    return lbl
+end
+
+local function makeActionBtn(parent, text, x, w, h)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, w or 60, 0, h or 26)
+    btn.Position = x
+    btn.BackgroundColor3 = Color3.fromRGB(12, 35, 12)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(0, 255, 68)
+    btn.TextSize = 13
+    btn.Font = Enum.Font.GothamBold
+    btn.BorderSizePixel = 0
+    btn.Parent = parent
+    local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(0,6); bc.Parent = btn
+    local bs = Instance.new("UIStroke"); bs.Color = Color3.fromRGB(0,204,51); bs.Thickness = 1.5; bs.Parent = btn
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(0,160,40)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(12,35,12)}):Play()
+    end)
+    return btn
+end
+
+local function makeSlider(parent, yPos, minVal, maxVal, defaultVal, onChanged)
+    -- Track bg
+    local trackBg = Instance.new("Frame")
+    trackBg.Size = UDim2.new(1, -10, 0, 8)
+    trackBg.Position = UDim2.new(0, 0, 0, yPos)
+    trackBg.BackgroundColor3 = Color3.fromRGB(8, 25, 8)
+    trackBg.BorderSizePixel = 0
+    trackBg.Parent = parent
+    local trc = Instance.new("UICorner"); trc.CornerRadius = UDim.new(1,0); trc.Parent = trackBg
+    local trs = Instance.new("UIStroke"); trs.Color = Color3.fromRGB(30,80,30); trs.Thickness = 1; trs.Parent = trackBg
+
+    -- Fill
+    local fillPct = (defaultVal - minVal) / (maxVal - minVal)
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(fillPct, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 50)
+    fill.BorderSizePixel = 0
+    fill.Parent = trackBg
+    local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(1,0); fc.Parent = fill
+
+    -- Knob
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = UDim2.new(fillPct, -8, 0.5, -8)
+    knob.BackgroundColor3 = Color3.fromRGB(0, 255, 68)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 3
+    knob.Parent = trackBg
+    local kc = Instance.new("UICorner"); kc.CornerRadius = UDim.new(1,0); kc.Parent = knob
+
+    -- Drag logic
+    local dragging = false
+    local currentVal = defaultVal
+
+    local function updateSlider(inputPos)
+        local trackAbsPos = trackBg.AbsolutePosition
+        local trackAbsSize = trackBg.AbsoluteSize
+        local relX = math.clamp((inputPos.X - trackAbsPos.X) / trackAbsSize.X, 0, 1)
+        currentVal = math.floor(minVal + relX * (maxVal - minVal))
+        fill.Size = UDim2.new(relX, 0, 1, 0)
+        knob.Position = UDim2.new(relX, -8, 0.5, -8)
+        if onChanged then onChanged(currentVal) end
+    end
+
+    knob.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+    end)
+    trackBg.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            updateSlider(inp.Position)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(inp.Position)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+
+    return trackBg, fill, knob, function() return currentVal end
+end
+
+local function makeToggle(parent, isOn, onToggle)
+    local toggleFrame = Instance.new("Frame")
+    toggleFrame.Size = UDim2.new(0, 52, 0, 28)
+    toggleFrame.BackgroundColor3 = isOn and Color3.fromRGB(0,160,40) or Color3.fromRGB(10,30,10)
+    toggleFrame.BorderSizePixel = 0
+    toggleFrame.Parent = parent
+    local tfc = Instance.new("UICorner"); tfc.CornerRadius = UDim.new(1,0); tfc.Parent = toggleFrame
+    local tfs = Instance.new("UIStroke"); tfs.Color = Color3.fromRGB(0,200,51); tfs.Thickness = 1.5; tfs.Parent = toggleFrame
+
+    local thumb = Instance.new("Frame")
+    thumb.Size = UDim2.new(0, 22, 0, 22)
+    thumb.Position = isOn and UDim2.new(1,-25,0.5,-11) or UDim2.new(0,3,0.5,-11)
+    thumb.BackgroundColor3 = isOn and Color3.fromRGB(0,255,68) or Color3.fromRGB(60,120,60)
+    thumb.BorderSizePixel = 0
+    thumb.ZIndex = 2
+    thumb.Parent = toggleFrame
+    local thc = Instance.new("UICorner"); thc.CornerRadius = UDim.new(1,0); thc.Parent = thumb
+
+    local state = isOn
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1,0,1,0)
+    btn.BackgroundTransparency = 1
+    btn.Text = ""
+    btn.ZIndex = 3
+    btn.Parent = toggleFrame
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        TweenService:Create(toggleFrame, TweenInfo.new(0.2), {
+            BackgroundColor3 = state and Color3.fromRGB(0,160,40) or Color3.fromRGB(10,30,10)
+        }):Play()
+        TweenService:Create(thumb, TweenInfo.new(0.2), {
+            Position = state and UDim2.new(1,-25,0.5,-11) or UDim2.new(0,3,0.5,-11),
+            BackgroundColor3 = state and Color3.fromRGB(0,255,68) or Color3.fromRGB(60,120,60)
+        }):Play()
+        if onToggle then onToggle(state) end
+    end)
+
+    return toggleFrame
+end
+
+local function makeTextLabel(parent, text, pos, size)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0, 120, 0, 16)
+    lbl.Position = pos
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(0,180,40)
+    lbl.TextSize = size or 11
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = parent
+    return lbl
+end
+
+-- ═══════════════════════════════════════
+-- NOTIFICATION
+-- ═══════════════════════════════════════
+local notif = Instance.new("TextLabel")
+notif.Size = UDim2.new(0, 300, 0, 36)
+notif.Position = UDim2.new(0.5, -150, 1, -70)
+notif.BackgroundColor3 = Color3.fromRGB(8, 25, 8)
+notif.Text = ""
+notif.TextColor3 = Color3.fromRGB(0,255,68)
+notif.TextSize = 14
+notif.Font = Enum.Font.GothamBold
+notif.BorderSizePixel = 0
+notif.BackgroundTransparency = 1
+notif.ZIndex = 10
+notif.Parent = screenGui
+local nc = Instance.new("UICorner"); nc.CornerRadius = UDim.new(0,8); nc.Parent = notif
+local ns = Instance.new("UIStroke"); ns.Color = Color3.fromRGB(0,204,51); ns.Thickness = 1.5; ns.Parent = notif
+
+local notifTween
+local function showNotif(msg)
+    if notifTween then notifTween:Cancel() end
+    notif.Text = "  " .. msg
+    notif.BackgroundTransparency = 0
+    notif.TextTransparency = 0
+    notifTween = TweenService:Create(notif, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 2), {
+        TextTransparency = 1,
+        BackgroundTransparency = 1,
+    })
+    notifTween:Play()
+end
+
+-- ═══════════════════════════════════════
+-- ── ROW 1: บิน ──
+-- ═══════════════════════════════════════
+local flyRow, flyContent, flyStroke = makeRow("🪽")
+flyRow.Size = UDim2.new(1, 0, 0, 72)
+
+makeLabel(flyContent, "บิน (ปรับสปีดได้)", 5, 13)
+
+local flyValLabel = makeTextLabel(flyContent, "ความเร็ว: 75 km/h", UDim2.new(0, 0, 0, 22), 11)
+
+local flySlider, flyFill, flyKnob, getFlyVal = makeSlider(flyContent, 40, 10, 300, 75, function(v)
+    State.flySpeed = v
+    flyValLabel.Text = "ความเร็ว: " .. v .. " km/h"
+end)
+flySlider.Size = UDim2.new(1, -10, 0, 8)
+
+-- Toggle fly
+local flyToggleFrame = makeToggle(flyContent, false, function(on)
+    State.flyEnabled = on
+    if on then
+        showNotif("🪽 เปิดการบิน!")
+    else
+        showNotif("การบิน ปิดแล้ว")
+        humanoid.PlatformStand = false
+        rootPart.Velocity = Vector3.new(0,0,0)
+    end
+end)
+flyToggleFrame.Position = UDim2.new(1, -62, 0, 5)
+
+-- ── ROW 2: สปีด ──
+local spdRow, spdContent = makeRow("🏃")
+spdRow.Size = UDim2.new(1, 0, 0, 72)
+
+makeLabel(spdContent, "สปีด (ปรับสปีดได้)", 5, 13)
+local spdValLabel = makeTextLabel(spdContent, "WalkSpeed: 16", UDim2.new(0, 0, 0, 22), 11)
+
+makeSlider(spdContent, 40, 16, 500, 16, function(v)
+    State.walkSpeed = v
+    spdValLabel.Text = "WalkSpeed: " .. v
+    if character and humanoid then
+        humanoid.WalkSpeed = v
+    end
+end)
+
+-- ── ROW 3: เสกเงิน ──
+local monRow, monContent = makeRow("💰")
+monRow.Size = UDim2.new(1, 0, 0, 72)
+
+makeLabel(monContent, "เสกเงิน (ปรับจำนวนได้)", 5, 13)
+
+-- Money display + controls
+local monDisplay = Instance.new("TextBox")
+monDisplay.Size = UDim2.new(0, 120, 0, 24)
+monDisplay.Position = UDim2.new(0, 0, 0, 28)
+monDisplay.BackgroundColor3 = Color3.fromRGB(5, 14, 5)
+monDisplay.Text = "$1,000,000"
+monDisplay.TextColor3 = Color3.fromRGB(0,255,68)
+monDisplay.TextSize = 12
+monDisplay.Font = Enum.Font.GothamBold
+monDisplay.BorderSizePixel = 0
+monDisplay.ClearTextOnFocus = false
+monDisplay.Parent = monContent
+local mdc = Instance.new("UICorner"); mdc.CornerRadius = UDim.new(0,5); mdc.Parent = monDisplay
+local mds = Instance.new("UIStroke"); mds.Color = Color3.fromRGB(0,180,40); mds.Thickness = 1; mds.Parent = monDisplay
+
+local function formatMoney(n)
+    return "$" .. tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,","")
+end
+
+monDisplay.FocusLost:Connect(function()
+    local raw = monDisplay.Text:gsub("[^%d]","")
+    State.moneyAmount = tonumber(raw) or State.moneyAmount
+    monDisplay.Text = formatMoney(State.moneyAmount)
+end)
+
+local upBtn = makeActionBtn(monContent, "▲", UDim2.new(0, 126, 0, 28), 22, 11)
+local downBtn = makeActionBtn(monContent, "▼", UDim2.new(0, 126, 0, 41), 22, 11)
+upBtn.TextSize = 10; downBtn.TextSize = 10
+
+upBtn.MouseButton1Click:Connect(function()
+    State.moneyAmount = State.moneyAmount + State.moneyStep
+    monDisplay.Text = formatMoney(State.moneyAmount)
+end)
+downBtn.MouseButton1Click:Connect(function()
+    State.moneyAmount = math.max(0, State.moneyAmount - State.moneyStep)
+    monDisplay.Text = formatMoney(State.moneyAmount)
+end)
+
+-- เสกปุ่ม
+local monBtn = makeActionBtn(monContent, "เสก", UDim2.new(0, 154, 0, 30), 55, 24)
+monBtn.MouseButton1Click:Connect(function()
+    -- ค้นหา leaderstats / money value อัตโนมัติ
+    local function findMoneyValue()
+        -- ค้นหาใน leaderstats
+        local ls = player:FindFirstChild("leaderstats")
+        if ls then
+            for _, name in ipairs(CONFIG.MONEY_NAMES) do
+                local v = ls:FindFirstChild(name)
+                if v then return v end
+            end
+        end
+        -- ค้นหาใน player โดยตรง
+        for _, name in ipairs(CONFIG.MONEY_NAMES) do
+            local v = player:FindFirstChild(name)
+            if v then return v end
+        end
+        return nil
+    end
+
+    local moneyVal = findMoneyValue()
+    if moneyVal then
+        moneyVal.Value = State.moneyAmount
+        showNotif("💰 เสกเงิน " .. formatMoney(State.moneyAmount) .. " สำเร็จ!")
+    else
+        -- ลอง RemoteEvent ถ้ามี
+        local remote = ReplicatedStorage:FindFirstChild("GiveMoney")
+            or ReplicatedStorage:FindFirstChild("AddMoney")
+            or ReplicatedStorage:FindFirstChild("SetMoney")
+        if remote then
+            remote:FireServer(State.moneyAmount)
+            showNotif("💰 ส่ง RemoteEvent เงิน " .. formatMoney(State.moneyAmount))
+        else
+            showNotif("⚠️ ไม่พบ Money value! ใส่ใน leaderstats")
+        end
+    end
+end)
+
+-- ── ROW 4: เสกดาบ / อาวุธ ──
+local wpnRow, wpnContent = makeRow("⚔️")
+wpnRow.Size = UDim2.new(1, 0, 0, 72)
+
+makeLabel(wpnContent, "เสกดาบ / อาวุธ", 5, 13)
+
+local dmgSlider, _, _, getDmg = makeSlider(wpnContent, 40, 10, 500, 100, function(v)
+    CONFIG.DAMAGE_AMOUNT = v
+end)
+dmgSlider.Size = UDim2.new(0, 150, 0, 8)
+makeTextLabel(wpnContent, "ดาเมจ: ปรับได้", UDim2.new(0, 0, 0, 24), 10)
+
+local wpnBtn = makeActionBtn(wpnContent, "เสกดาบ", UDim2.new(1, -75, 0, 5), 70, 26)
+wpnBtn.MouseButton1Click:Connect(function()
+    -- ค้นหา Tool จาก ReplicatedStorage หรือ ServerStorage
+    local tool = ReplicatedStorage:FindFirstChild(CONFIG.WEAPON_NAME)
+    if tool then
+        local clone = tool:Clone()
+        clone.Parent = player.Backpack
+        showNotif("⚔️ เสกดาบสำเร็จ! ดาเมจ: " .. CONFIG.DAMAGE_AMOUNT)
+    else
+        --
