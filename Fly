@@ -1,0 +1,122 @@
+local player = game.Players.LocalPlayer
+
+-- โหลดตัวละคร
+local function getHumanoid()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("Humanoid")
+end
+
+local humanoid = getHumanoid()
+
+-- UI
+local ScreenGui = Instance.new("ScreenGui", player.PlayerGui)
+local Frame = Instance.new("Frame", ScreenGui)
+local TopBar = Instance.new("TextLabel", Frame)
+local ToggleBtn = Instance.new("TextButton", Frame)
+
+local SpeedBox = Instance.new("TextBox", Frame)
+local SpeedBtn = Instance.new("TextButton", Frame)
+
+local FlyBtn = Instance.new("TextButton", Frame)
+
+-- Frame
+Frame.Size = UDim2.new(0, 260, 0, 200)
+Frame.Position = UDim2.new(0.5, -130, 0.5, -100)
+Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+
+-- TopBar
+TopBar.Size = UDim2.new(1, 0, 0, 30)
+TopBar.Text = "⚡ Speed + Fly Hub"
+TopBar.BackgroundColor3 = Color3.fromRGB(40,40,40)
+
+-- Toggle (พับ)
+ToggleBtn.Size = UDim2.new(0, 30, 0, 30)
+ToggleBtn.Position = UDim2.new(1, -30, 0, 0)
+ToggleBtn.Text = "-"
+
+local opened = true
+ToggleBtn.MouseButton1Click:Connect(function()
+    opened = not opened
+    Frame.Size = opened and UDim2.new(0,260,0,200) or UDim2.new(0,260,0,30)
+end)
+
+-- Speed Box
+SpeedBox.Size = UDim2.new(1, -20, 0, 35)
+SpeedBox.Position = UDim2.new(0, 10, 0, 40)
+SpeedBox.PlaceholderText = "Speed (0-400)"
+
+-- Speed Button
+SpeedBtn.Size = UDim2.new(1, -20, 0, 35)
+SpeedBtn.Position = UDim2.new(0, 10, 0, 80)
+SpeedBtn.Text = "Set Speed"
+
+SpeedBtn.MouseButton1Click:Connect(function()
+    local speed = tonumber(SpeedBox.Text)
+    if speed then
+        if speed > 400 then speed = 400 end
+        if speed < 0 then speed = 0 end
+        humanoid.WalkSpeed = speed
+    end
+end)
+
+-- Fly System
+local flying = false
+local bv, bg
+
+FlyBtn.Size = UDim2.new(1, -20, 0, 35)
+FlyBtn.Position = UDim2.new(0, 10, 0, 120)
+FlyBtn.Text = "Fly: OFF"
+
+FlyBtn.MouseButton1Click:Connect(function()
+    flying = not flying
+    FlyBtn.Text = flying and "Fly: ON" or "Fly: OFF"
+
+    local char = player.Character
+    local hrp = char:WaitForChild("HumanoidRootPart")
+
+    if flying then
+        bv = Instance.new("BodyVelocity", hrp)
+        bg = Instance.new("BodyGyro", hrp)
+        bv.MaxForce = Vector3.new(999999,999999,999999)
+        bg.MaxTorque = Vector3.new(999999,999999,999999)
+
+        game:GetService("RunService").RenderStepped:Connect(function()
+            if flying then
+                bv.Velocity = workspace.CurrentCamera.CFrame.LookVector * 50
+                bg.CFrame = workspace.CurrentCamera.CFrame
+            end
+        end)
+    else
+        if bv then bv:Destroy() end
+        if bg then bg:Destroy() end
+    end
+end)
+
+-- Drag UI
+local UIS = game:GetService("UserInputService")
+local dragging, dragStart, startPos
+
+TopBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+    end
+end)
+
+TopBar.InputEnded:Connect(function()
+    dragging = false
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+                                   startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- รีโหลดตอนตาย
+player.CharacterAdded:Connect(function()
+    humanoid = getHumanoid()
+end)
